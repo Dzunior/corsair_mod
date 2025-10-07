@@ -226,7 +226,12 @@ entity {{ module_name }} is
 generic(
     ADDR_W : integer := {{ config['address_width'] }};
     DATA_W : integer := {{ config['data_width'] }};
+    {% if interface in ['axil', 'apb', 'amm'] %}
+    STRB_W : integer := {{ config['data_width'] // 8 }};
+    BASE_ADDR : std_logic_vector({{ config['address_width'] }}-1 downto 0) := x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
+    {% else %}
     STRB_W : integer := {{ config['data_width'] // 8 }}
+    {% endif %}
 );
 port(
     clk    : in std_logic;
@@ -281,15 +286,15 @@ port(
 {{ amm_ports() }}
 {% else %}
     -- Local Bus
-    waddr  : in  std_logic_vector(ADDR_W-1 downto 0);
-    wdata  : in  std_logic_vector(DATA_W-1 downto 0);
-    wen    : in  std_logic;
-    wstrb  : in  std_logic_vector(STRB_W-1 downto 0);
-    wready : out std_logic;
-    raddr  : in  std_logic_vector(ADDR_W-1 downto 0);
-    ren    : in  std_logic;
-    rdata  : out std_logic_vector(DATA_W-1 downto 0);
-    rvalid : out std_logic
+    waddr : in  std_logic_vector(ADDR_W-1 downto 0);
+    wdata : in  std_logic_vector(DATA_W-1 downto 0);
+    wen   : in  std_logic;
+    wstrb : in  std_logic_vector(STRB_W-1 downto 0);
+    wready: out std_logic;
+    raddr : in  std_logic_vector(ADDR_W-1 downto 0);
+    ren   : in  std_logic;
+    rdata : out std_logic_vector(DATA_W-1 downto 0);
+    rvalid: out std_logic
 {% endif %}
 );
 end entity;
@@ -367,13 +372,21 @@ begin
     {% endif %}
 
     {% if 'w' in reg.access %}
+{% if interface in ['axil','apb','amm'] %}
+{{ sig_csr_wen(reg) }} <= wen when (unsigned(waddr_absolute) = unsigned(BASE_ADDR) + to_unsigned({{ reg.address }}, ADDR_W)) else '0'; {{ literal_comment(reg.address) }}
+{% else %}
 {{ sig_csr_wen(reg) }} <= wen when (waddr = {{ literal(reg.address, "ADDR_W", width_is_param=1) }}) else '0'; {{ literal_comment(reg.address) }}
+{% endif %}
     {% endif %}
 
     {% if 'r' in reg.access %}
+{% if interface in ['axil','apb','amm'] %}
+{{ sig_csr_ren(reg) }} <= ren when (unsigned(raddr_absolute) = unsigned(BASE_ADDR) + to_unsigned({{ reg.address }}, ADDR_W)) else '0'; {{ literal_comment(reg.address) }}
+{% else %}
 {{ sig_csr_ren(reg) }} <= ren when (raddr = {{ literal(reg.address, "ADDR_W", width_is_param=1) }}) else '0'; {{ literal_comment(reg.address) }}
+{% endif %}
 {{ process_begin(sig=sig_csr_ren_ff(reg))}}
-        {{ sig_csr_ren_ff(reg) }} <= {{ sig_csr_ren(reg) }};
+    {{ sig_csr_ren_ff(reg) }} <= {{ sig_csr_ren(reg) }};
 {{ process_end() }}
     {% endif %}
     {% for bf in reg %}
@@ -529,11 +542,19 @@ wready <= '1';
 --------------------------------------------------------------------------------
 {{ process_begin(sig='rdata_ff', width=config['data_width'], init=read_filler)}}
     if (ren = '1') then
+        {% if interface in ['axil','apb','amm'] %}
+        case unsigned(raddr_absolute) is
+        {% for reg in rmap %}
+            when unsigned(BASE_ADDR) + to_unsigned({{ reg.address }}, ADDR_W) => {{ literal_comment(reg.address) }}
+                rdata_ff <= {{ sig_csr_rdata(reg) }};
+        {% endfor %}
+        {% else %}
         case unsigned(raddr) is
-{% for reg in rmap %}
+        {% for reg in rmap %}
             when to_unsigned({{ reg.address }}, ADDR_W) => {{ literal_comment(reg.address) }}
                 rdata_ff <= {{ sig_csr_rdata(reg) }};
-{% endfor %}
+        {% endfor %}
+        {% endif %}
             when others =>
                 rdata_ff <= {{ literal(read_filler, config['data_width']) }}; {{ literal_comment(read_filler) }}
         end case;

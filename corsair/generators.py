@@ -8,6 +8,7 @@ import os
 import json
 import yaml
 import jinja2
+import re
 from corsair import __version__
 from . import utils
 from . import config
@@ -88,8 +89,10 @@ class Jinja2():
         """
         # render
         rendered_text = self.render(template, vars, templates_path)
+        # strip leading blank lines that may be produced by templates
+        rendered_text = re.sub(r"\A(\s*\n)+", "", rendered_text)
         # save
-        utils.create_dirs(self.path)
+        utils.create_dirs(path)
         with open(path, "w") as f:
             f.write(rendered_text)
 
