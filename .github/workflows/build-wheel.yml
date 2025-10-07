@@ -1,9 +1,10 @@
 name: Build Python Wheel
 
 on:
-  release:
-    types: [published]  # Builds on new release
-
+  push:
+    tags:
+      - 'v*'
+      
 jobs:
   build-wheel:
     runs-on: ubuntu-latest
