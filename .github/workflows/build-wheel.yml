@@ -30,7 +30,7 @@ jobs:
           pip install build GitPython
 
       - name: Build wheel
-        run: python -m build --wheel --no-isolation
+        run: python -m build --wheel
 
       - name: Upload wheel as workflow artifact
         uses: actions/upload-artifact@v4
