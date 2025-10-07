@@ -2,6 +2,9 @@ name: Build Python Wheel
 
 on:
   push:
+    # Build on pushes to the default branch and on tag pushes
+    branches:
+      - master
     tags:
       - 'v*'
       
@@ -24,7 +27,14 @@ jobs:
       - name: Build wheel
         run: python -m build --wheel
 
-      - name: Upload wheel to release
+      - name: Upload wheel as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: corsair-wheel
+          path: dist/*.whl
+
+      - name: Upload wheel to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: dist/*.whl
