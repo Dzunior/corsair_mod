@@ -525,24 +525,18 @@ wready <= '1';
 {% endif %}
 
 --------------------------------------------------------------------------------
--- Read address decoder
+-- Read address decoder (Optimized with Case Statement)
 --------------------------------------------------------------------------------
 {{ process_begin(sig='rdata_ff', width=config['data_width'], init=read_filler)}}
     if (ren = '1') then
-{% set loop_ns = namespace(first_reg = True) %}
+        case unsigned(raddr) is
 {% for reg in rmap %}
-    {% if loop_ns.first_reg %}
-        if raddr = {{ literal(reg.address, "ADDR_W", width_is_param=1)}} then {{ literal_comment(reg.address) }}
-            rdata_ff <= {{ sig_csr_rdata(reg) }};
-    {% else %}
-        elsif raddr = {{ literal(reg.address, "ADDR_W", width_is_param=1)}} then {{ literal_comment(reg.address) }}
-            rdata_ff <= {{ sig_csr_rdata(reg) }};
-    {% endif %}
-    {% set loop_ns.first_reg = False %}
+            when to_unsigned({{ reg.address }}, ADDR_W) => {{ literal_comment(reg.address) }}
+                rdata_ff <= {{ sig_csr_rdata(reg) }};
 {% endfor %}
-        else 
-            rdata_ff <= {{ literal(read_filler, config['data_width']) }}; {{ literal_comment(read_filler) }}
-        end if;
+            when others =>
+                rdata_ff <= {{ literal(read_filler, config['data_width']) }}; {{ literal_comment(read_filler) }}
+        end case;
     else
         rdata_ff <= {{ literal(read_filler, config['data_width']) }}; {{ literal_comment(read_filler) }}
     end if;
