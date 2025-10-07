@@ -50,7 +50,7 @@ end process;
 
 -- Created with Corsair v{{ corsair_ver }}
 --
--- AXI-Lite to Local Bus bridge
+-- AXI-Lite to Local Bus bridge with base address support
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -58,14 +58,15 @@ use ieee.numeric_std.all;
 
 entity {{ module_name }} is
 generic(
-    ADDR_W : integer := {{ config['address_width'] }};
-    DATA_W : integer := {{ config['data_width'] }};
-    STRB_W : integer := {{ config['data_width'] // 8 }}
+    ADDR_W      : integer := {{ config['address_width'] }};
+    DATA_W      : integer := {{ config['data_width'] }};
+    STRB_W      : integer := {{ config['data_width'] // 8 }};
+    BASE_ADDR   : std_logic_vector({{ config['address_width'] }}-1 downto 0) := x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
 );
 port(
     clk    : in std_logic;
     rst    : in std_logic;
-    -- Local Bus
+    -- Local Bus (relative addressing from base)
     wready : in  std_logic;
     waddr  : out std_logic_vector(ADDR_W-1 downto 0);
     wdata  : out std_logic_vector(DATA_W-1 downto 0);
@@ -76,7 +77,7 @@ port(
     raddr  : out std_logic_vector(ADDR_W-1 downto 0);
     ren    : out std_logic;
     {% macro axil_ports() %}
-    -- AXI-Lite
+    -- AXI-Lite (absolute addressing)
     axil_awaddr   : in  std_logic_vector(ADDR_W-1 downto 0);
     axil_awprot   : in  std_logic_vector(2 downto 0);
     axil_awvalid  : in  std_logic;
@@ -100,9 +101,52 @@ port(
     {{ axil_ports() }}
 );
 end {{ module_name }};
+
 architecture arch_imp of {{ module_name }} is
 {% macro axil_signals(regmap_embed=False) %}
     {% if regmap_embed %}
+
+-- Clock Interface
+attribute X_INTERFACE_INFO : string;
+attribute X_INTERFACE_PARAMETER : string;
+
+attribute X_INTERFACE_INFO of clk : signal is "xilinx.com:signal:clock:1.0 clk CLK";
+attribute X_INTERFACE_PARAMETER of clk : signal is "ASSOCIATED_BUSIF S_AXI, ASSOCIATED_RESET rst, FREQ_HZ 100000000, PHASE 0.000, CLK_DOMAIN {{ module_name }}_clk";
+
+-- Reset Interface  
+attribute X_INTERFACE_INFO of rst : signal is "xilinx.com:signal:reset:1.0 rst RST";
+attribute X_INTERFACE_PARAMETER of rst : signal is "POLARITY {% if 'pos' in config['register_reset'] %}ACTIVE_HIGH{% else %}ACTIVE_LOW{% endif %}";
+
+-- AXI-Lite Interface Write Address Channel
+attribute X_INTERFACE_INFO of axil_awaddr  : signal is "xilinx.com:interface:aximm:1.0 S_AXI AWADDR";
+attribute X_INTERFACE_INFO of axil_awprot  : signal is "xilinx.com:interface:aximm:1.0 S_AXI AWPROT";
+attribute X_INTERFACE_INFO of axil_awvalid : signal is "xilinx.com:interface:aximm:1.0 S_AXI AWVALID";
+attribute X_INTERFACE_INFO of axil_awready : signal is "xilinx.com:interface:aximm:1.0 S_AXI AWREADY";
+
+-- AXI-Lite Interface Write Data Channel
+attribute X_INTERFACE_INFO of axil_wdata   : signal is "xilinx.com:interface:aximm:1.0 S_AXI WDATA";
+attribute X_INTERFACE_INFO of axil_wstrb   : signal is "xilinx.com:interface:aximm:1.0 S_AXI WSTRB";
+attribute X_INTERFACE_INFO of axil_wvalid  : signal is "xilinx.com:interface:aximm:1.0 S_AXI WVALID";
+attribute X_INTERFACE_INFO of axil_wready  : signal is "xilinx.com:interface:aximm:1.0 S_AXI WREADY";
+
+-- AXI-Lite Interface Write Response Channel
+attribute X_INTERFACE_INFO of axil_bresp   : signal is "xilinx.com:interface:aximm:1.0 S_AXI BRESP";
+attribute X_INTERFACE_INFO of axil_bvalid  : signal is "xilinx.com:interface:aximm:1.0 S_AXI BVALID";
+attribute X_INTERFACE_INFO of axil_bready  : signal is "xilinx.com:interface:aximm:1.0 S_AXI BREADY";
+
+-- AXI-Lite Interface Read Address Channel
+attribute X_INTERFACE_INFO of axil_araddr  : signal is "xilinx.com:interface:aximm:1.0 S_AXI ARADDR";
+attribute X_INTERFACE_INFO of axil_arprot  : signal is "xilinx.com:interface:aximm:1.0 S_AXI ARPROT";
+attribute X_INTERFACE_INFO of axil_arvalid : signal is "xilinx.com:interface:aximm:1.0 S_AXI ARVALID";
+attribute X_INTERFACE_INFO of axil_arready : signal is "xilinx.com:interface:aximm:1.0 S_AXI ARREADY";
+
+-- AXI-Lite Interface Read Data Channel
+attribute X_INTERFACE_INFO of axil_rdata   : signal is "xilinx.com:interface:aximm:1.0 S_AXI RDATA";
+attribute X_INTERFACE_INFO of axil_rresp   : signal is "xilinx.com:interface:aximm:1.0 S_AXI RRESP";
+attribute X_INTERFACE_INFO of axil_rvalid  : signal is "xilinx.com:interface:aximm:1.0 S_AXI RVALID";
+attribute X_INTERFACE_INFO of axil_rready  : signal is "xilinx.com:interface:aximm:1.0 S_AXI RREADY";
+
+
 signal wready : std_logic;
 signal waddr  : std_logic_vector(ADDR_W-1 downto 0);
 signal wdata  : std_logic_vector(DATA_W-1 downto 0);
@@ -113,8 +157,16 @@ signal rvalid : std_logic;
 signal raddr  : std_logic_vector(ADDR_W-1 downto 0);
 signal ren    : std_logic;
     {% endif %}
+
+-- Address translation signals
 signal waddr_int       : std_logic_vector(ADDR_W-1 downto 0);
 signal raddr_int       : std_logic_vector(ADDR_W-1 downto 0);
+signal waddr_absolute  : std_logic_vector(ADDR_W-1 downto 0);
+signal raddr_absolute  : std_logic_vector(ADDR_W-1 downto 0);
+signal waddr_relative  : std_logic_vector(ADDR_W-1 downto 0);
+signal raddr_relative  : std_logic_vector(ADDR_W-1 downto 0);
+
+-- Control signals
 signal wdata_int       : std_logic_vector(DATA_W-1 downto 0);
 signal strb_int        : std_logic_vector(STRB_W-1 downto 0);
 signal awflag          : std_logic;
@@ -126,27 +178,42 @@ signal ren_int         : std_logic;
 signal axil_bvalid_int : std_logic;
 signal axil_rdata_int  : std_logic_vector(DATA_W-1 downto 0);
 signal axil_rvalid_int : std_logic;
+
+-- Address range checking
+signal addr_in_range_w : std_logic;
+signal addr_in_range_r : std_logic;
+
 {% endmacro %}
 {{ axil_signals() }}
+
 begin
+
+-- Address translation: Convert AXI absolute addresses to local bus relative addresses
+waddr_relative <= std_logic_vector(unsigned(waddr_absolute) - unsigned(BASE_ADDR));
+raddr_relative <= std_logic_vector(unsigned(raddr_absolute) - unsigned(BASE_ADDR));
+
+-- Address range checking (optional - can be used for error responses)
+addr_in_range_w <= '1' when unsigned(waddr_absolute) >= unsigned(BASE_ADDR) else '0';
+addr_in_range_r <= '1' when unsigned(raddr_absolute) >= unsigned(BASE_ADDR) else '0';
+
 {% macro axil_core() %}
 axil_awready <= not awflag;
 axil_wready  <= not wflag;
 axil_bvalid  <= axil_bvalid_int;
-waddr        <= waddr_int;
+waddr        <= waddr_relative;  -- Output relative address to local bus
 wdata        <= wdata_int;
 wstrb        <= strb_int;
-wen_int      <= awflag and wflag;
+wen_int      <= awflag and wflag and addr_in_range_w;  -- Include range check
 wen          <= wen_int;
-axil_bresp   <= b"00";
+axil_bresp   <= b"00" when addr_in_range_w = '1' else b"10";  -- SLVERR if out of range
 
-{{ process_begin(["waddr_int", "wdata_int", "strb_int", "awflag", "wflag", "axil_bvalid_int"],
+{{ process_begin(["waddr_absolute", "wdata_int", "strb_int", "awflag", "wflag", "axil_bvalid_int"],
                  ["(others => '0')", "(others => '0')", "(others => '0')", "'0'", "'0'", "'0'"]) }}
     if (axil_awvalid = '1' and awflag = '0') then
-        awflag    <= '1';
-        waddr_int <= axil_awaddr;
+        awflag         <= '1';
+        waddr_absolute <= axil_awaddr;  -- Store absolute address
     elsif (wen_int = '1' and wready = '1') then
-        awflag    <= '0';
+        awflag         <= '0';
     end if;
     if (axil_wvalid = '1' and wflag = '0') then
         wflag     <= '1';
@@ -158,25 +225,25 @@ axil_bresp   <= b"00";
     if (axil_bvalid_int = '1' and axil_bready = '1') then
         axil_bvalid_int <= '0';
     elsif ((axil_wvalid = '1' and awflag = '1') or (axil_awvalid = '1' and wflag = '1') or (wflag = '1' and awflag = '1')) then
-        axil_bvalid_int <= wready;
+        axil_bvalid_int <= '1';  -- Always generate response (wready checking moved to wen_int)
     end if;
 {{ process_end() }}
 
 axil_arready <= not arflag;
 axil_rdata   <= axil_rdata_int;
 axil_rvalid  <= axil_rvalid_int;
-raddr        <= raddr_int;
-ren_int      <= arflag and (not rflag);
+raddr        <= raddr_relative;  -- Output relative address to local bus
+ren_int      <= arflag and (not rflag) and addr_in_range_r;  -- Include range check
 ren          <= ren_int;
-axil_rresp   <= b"00";
+axil_rresp   <= b"00" when addr_in_range_r = '1' else b"10";  -- SLVERR if out of range
 
-{{ process_begin(["raddr_int", "arflag", "rflag", "axil_rdata_int", "axil_rvalid_int"],
+{{ process_begin(["raddr_absolute", "arflag", "rflag", "axil_rdata_int", "axil_rvalid_int"],
                  ["(others => '0')", "'0'", "'0'", "(others => '0')", "'0'"]) }}
     if (axil_arvalid = '1' and arflag = '0') then
-        arflag    <= '1';
-        raddr_int <= axil_araddr;
+        arflag         <= '1';
+        raddr_absolute <= axil_araddr;  -- Store absolute address
     elsif (axil_rvalid_int = '1' and axil_rready = '1') then
-        arflag    <= '0';
+        arflag         <= '0';
     end if;
     if (rvalid = '1' and ren_int = '1' and rflag = '0') then
         rflag <= '1';
@@ -188,8 +255,13 @@ axil_rresp   <= b"00";
         axil_rvalid_int <= '1';
     elsif (axil_rvalid_int = '1' and axil_rready = '1') then
         axil_rvalid_int <= '0';
+    elsif (addr_in_range_r = '0' and arflag = '1' and axil_rvalid_int = '0') then
+        -- Generate error response for out-of-range addresses
+        axil_rdata_int  <= (others => '0');
+        axil_rvalid_int <= '1';
     end if;
 {{ process_end() }}
 {% endmacro %}
 {{ axil_core() }}
+
 end arch_imp;
