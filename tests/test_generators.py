@@ -169,6 +169,24 @@ class TestLbBridgeVhdl:
         self._test(tmpdir, 'axil2lb.vhd', 'axil', 'AXI-Lite to Local Bus bridge')
 
 
+class TestVhdlTestbench:
+    """Class 'generators.VhdlTestbench' testing."""
+
+    def _test(self, tmpdir, filename, dut_file, bridge_type, assert_str):
+        output_file = str(tmpdir.join(filename))
+        print('output_file:', output_file)
+        # write output file
+        generators.VhdlTestbench(path=output_file, dut_file=dut_file, bridge_type=bridge_type).generate()
+        # read file and verify
+        with open(output_file, 'r') as f:
+            raw_str = ''.join(f.readlines())
+        assert assert_str in raw_str
+
+    def test_axil(self, tmpdir):
+        """Test of creating AXI-Lite testbench in VHDL"""
+        self._test(tmpdir, 'axil2lb_tb.vhd', 'axil2lb.vhd', 'axil', 'Testbench for axil2lb')
+
+
 class TestMarkdown:
     """Class 'generators.Markdown' testing."""
 
