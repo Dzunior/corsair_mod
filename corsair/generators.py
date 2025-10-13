@@ -490,7 +490,7 @@ class LbBridgeVhdl(Generator, Jinja2):
 
 
 class VhdlTestbench(Generator, Jinja2):
-    """Create VHDL testbench for bridge to Local Bus.
+    """Create VHDL testbench for register map module with AXI-Lite interface.
 
     :param rmap: Register map object
     :type rmap: :class:`corsair.RegisterMap`
@@ -498,30 +498,32 @@ class VhdlTestbench(Generator, Jinja2):
     :type path: str
     :param dut_file: Path to the DUT VHDL file (used to extract module name)
     :type dut_file: str
-    :param bridge_type: Bridge protocol. Currently only 'axil' is supported.
-    :type bridge_type: str
+    :param interface: Register map bus protocol. Currently only 'axil' is supported.
+    :type interface: str
     """
 
-    def __init__(self, rmap=None, path='axil2lb_tb.vhd', dut_file='axil2lb.vhd', bridge_type='axil', **args):
+    def __init__(self, rmap=None, path='regs_tb.vhd', dut_file='regs.vhd', interface='axil', **args):
         super().__init__(rmap, **args)
         self.path = path
         self.dut_file = dut_file
-        self.bridge_type = bridge_type
+        self.interface = interface
 
     def validate(self):
-        assert self.bridge_type in ['axil'], \
-            "Only 'axil' bridge type is currently supported for testbench generation, '%s' was provided!" % (self.bridge_type)
+        super().validate()
+        assert self.interface in ['axil'], \
+            "Only 'axil' interface is currently supported for testbench generation, '%s' was provided!" % (self.interface)
 
     def generate(self):
         # validate parameters
         self.validate()
         # prepare jinja2
-        if self.bridge_type == 'axil':
-            j2_template = 'axil2lb_vhdl_tb.j2'
+        if self.interface == 'axil':
+            j2_template = 'regmap_vhdl_tb.j2'
         j2_vars = {}
         j2_vars['corsair_ver'] = __version__
         j2_vars['tb_name'] = utils.get_file_name(self.path)
         j2_vars['dut_name'] = utils.get_file_name(self.dut_file)
+        j2_vars['rmap'] = self.rmap
         j2_vars['config'] = config.globcfg
         # render
         self.render_to_file(j2_template, j2_vars, self.path)

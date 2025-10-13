@@ -172,11 +172,13 @@ class TestLbBridgeVhdl:
 class TestVhdlTestbench:
     """Class 'generators.VhdlTestbench' testing."""
 
-    def _test(self, tmpdir, filename, dut_file, bridge_type, assert_str):
+    def _test(self, tmpdir, filename, dut_file, interface, assert_str):
         output_file = str(tmpdir.join(filename))
         print('output_file:', output_file)
+        # create regmap
+        rmap = utils.create_template()
         # write output file
-        generators.VhdlTestbench(path=output_file, dut_file=dut_file, bridge_type=bridge_type).generate()
+        generators.VhdlTestbench(rmap, path=output_file, dut_file=dut_file, interface=interface).generate()
         # read file and verify
         with open(output_file, 'r') as f:
             raw_str = ''.join(f.readlines())
@@ -184,7 +186,7 @@ class TestVhdlTestbench:
 
     def test_axil(self, tmpdir):
         """Test of creating AXI-Lite testbench in VHDL"""
-        self._test(tmpdir, 'axil2lb_tb.vhd', 'axil2lb.vhd', 'axil', 'Testbench for axil2lb')
+        self._test(tmpdir, 'regs_tb.vhd', 'regs.vhd', 'axil', 'Testbench for regs')
 
 
 class TestMarkdown:

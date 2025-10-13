@@ -1,0 +1,374 @@
+{#- VHDL Testbench template for register map with AXI-Lite interface #}
+-- Created with Corsair v{{ corsair_ver }}
+--
+-- Testbench for {{ dut_name }}
+--
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity {{ tb_name }} is
+end {{ tb_name }};
+
+architecture testbench of {{ tb_name }} is
+
+    -- Component declaration
+    component {{ dut_name }}
+    generic(
+        ADDR_W    : integer := {{ config['address_width'] }};
+        DATA_W    : integer := {{ config['data_width'] }};
+        STRB_W    : integer := {{ config['data_width'] // 8 }};
+        BASE_ADDR : std_logic_vector({{ config['address_width'] }}-1 downto 0) := x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
+    );
+    port(
+        clk    : in std_logic;
+        rst    : in std_logic;
+{% if rmap %}
+{% for reg in rmap %}
+        -- {{ reg.name }} register signals
+{% for bf in reg %}
+{% if bf.access in ['rw', 'wo'] %}
+{% if bf.hardware in ['o', 'oe', 'ol'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+{% endif %}
+{% if bf.hardware in ['oe', 'ioe'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+{% endif %}
+{% if bf.hardware in ['ioea'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : out std_logic;
+{% endif %}
+{% endif %}
+{% if bf.access == 'ro' %}
+{% if bf.hardware in ['i', 'ie'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+        -- AXI-Lite
+        axil_awaddr   : in  std_logic_vector(ADDR_W-1 downto 0);
+        axil_awprot   : in  std_logic_vector(2 downto 0);
+        axil_awvalid  : in  std_logic;
+        axil_awready  : out std_logic;
+        axil_wdata    : in  std_logic_vector(DATA_W-1 downto 0);
+        axil_wstrb    : in  std_logic_vector(STRB_W-1 downto 0);
+        axil_wvalid   : in  std_logic;
+        axil_wready   : out std_logic;
+        axil_bresp    : out std_logic_vector(1 downto 0);
+        axil_bvalid   : out std_logic;
+        axil_bready   : in  std_logic;
+        axil_araddr   : in  std_logic_vector(ADDR_W-1 downto 0);
+        axil_arprot   : in  std_logic_vector(2 downto 0);
+        axil_arvalid  : in  std_logic;
+        axil_arready  : out std_logic;
+        axil_rdata    : out std_logic_vector(DATA_W-1 downto 0);
+        axil_rresp    : out std_logic_vector(1 downto 0);
+        axil_rvalid   : out std_logic;
+        axil_rready   : in  std_logic
+    );
+    end component;
+
+    -- Constants
+    constant ADDR_W : integer := {{ config['address_width'] }};
+    constant DATA_W : integer := {{ config['data_width'] }};
+    constant STRB_W : integer := {{ config['data_width'] // 8 }};
+    constant CLK_PERIOD : time := 10 ns;
+{% if rmap %}
+{% for reg in rmap %}
+    constant CSR_{{ reg.name|upper }}_ADDR : std_logic_vector(ADDR_W-1 downto 0) := x"{{ '%08X' | format(reg.address) if config['address_width'] <= 32 else '%016X' | format(reg.address) }}";
+{% for bf in reg %}
+    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB : integer := {{ bf.lsb }};
+    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH : integer := {{ bf.width }};
+    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}std_logic_vector(to_unsigned({{ bf.reset }}, {{ bf.width }})){% else %}'{{ bf.reset }}'{% endif %};
+{% endfor %}
+{% endfor %}
+{% endif %}
+    
+    -- Clock and reset signals
+    signal clk : std_logic := '0';
+    signal rst : std_logic := {% if 'pos' in config['register_reset'] %}'1'{% else %}'0'{% endif %};
+    
+{% if rmap %}
+{% for reg in rmap %}
+    -- {{ reg.name }} register signals
+{% for bf in reg %}
+{% if bf.access in ['rw', 'wo'] %}
+{% if bf.hardware in ['o', 'oe', 'ol'] %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+{% endif %}
+{% if bf.hardware in ['oe', 'ioe'] %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
+{% endif %}
+{% if bf.hardware in ['ioea'] %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : std_logic;
+{% endif %}
+{% endif %}
+{% if bf.access == 'ro' %}
+{% if bf.hardware in ['i', 'ie'] %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% else %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% endif %};
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+    -- AXI-Lite signals
+    signal axil_awaddr  : std_logic_vector(ADDR_W-1 downto 0) := (others => '0');
+    signal axil_awprot  : std_logic_vector(2 downto 0) := (others => '0');
+    signal axil_awvalid : std_logic := '0';
+    signal axil_awready : std_logic;
+    signal axil_wdata   : std_logic_vector(DATA_W-1 downto 0) := (others => '0');
+    signal axil_wstrb   : std_logic_vector(STRB_W-1 downto 0) := (others => '0');
+    signal axil_wvalid  : std_logic := '0';
+    signal axil_wready  : std_logic;
+    signal axil_bresp   : std_logic_vector(1 downto 0);
+    signal axil_bvalid  : std_logic;
+    signal axil_bready  : std_logic := '0';
+    signal axil_araddr  : std_logic_vector(ADDR_W-1 downto 0) := (others => '0');
+    signal axil_arprot  : std_logic_vector(2 downto 0) := (others => '0');
+    signal axil_arvalid : std_logic := '0';
+    signal axil_arready : std_logic;
+    signal axil_rdata   : std_logic_vector(DATA_W-1 downto 0);
+    signal axil_rresp   : std_logic_vector(1 downto 0);
+    signal axil_rvalid  : std_logic;
+    signal axil_rready  : std_logic := '0';
+    
+    -- Test control
+    signal test_done : boolean := false;
+    signal error_count : integer := 0;
+
+begin
+
+    -- Clock generation
+    clk_proc: process
+    begin
+        while not test_done loop
+            clk <= '0';
+            wait for CLK_PERIOD / 2;
+            clk <= '1';
+            wait for CLK_PERIOD / 2;
+        end loop;
+        wait;
+    end process;
+
+    -- Reset generation
+    reset_proc: process
+    begin
+        rst <= {% if 'pos' in config['register_reset'] %}'1'{% else %}'0'{% endif %};
+        wait for CLK_PERIOD * 5;
+        rst <= {% if 'pos' in config['register_reset'] %}'0'{% else %}'1'{% endif %};
+        wait;
+    end process;
+
+    -- DUT instantiation
+    dut: {{ dut_name }}
+    generic map(
+        ADDR_W    => ADDR_W,
+        DATA_W    => DATA_W,
+        STRB_W    => STRB_W,
+        BASE_ADDR => x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
+    )
+    port map(
+        clk           => clk,
+        rst           => rst,
+{% if rmap %}
+{% for reg in rmap %}
+        -- {{ reg.name }} register signals
+{% for bf in reg %}
+{% if bf.access in ['rw', 'wo'] %}
+{% if bf.hardware in ['o', 'oe', 'ol'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out,
+{% endif %}
+{% if bf.hardware in ['oe', 'ioe'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
+{% endif %}
+{% if bf.hardware in ['ioea'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess,
+{% endif %}
+{% endif %}
+{% if bf.access == 'ro' %}
+{% if bf.hardware in ['i', 'ie'] %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+        axil_awaddr   => axil_awaddr,
+        axil_awprot   => axil_awprot,
+        axil_awvalid  => axil_awvalid,
+        axil_awready  => axil_awready,
+        axil_wdata    => axil_wdata,
+        axil_wstrb    => axil_wstrb,
+        axil_wvalid   => axil_wvalid,
+        axil_wready   => axil_wready,
+        axil_bresp    => axil_bresp,
+        axil_bvalid   => axil_bvalid,
+        axil_bready   => axil_bready,
+        axil_araddr   => axil_araddr,
+        axil_arprot   => axil_arprot,
+        axil_arvalid  => axil_arvalid,
+        axil_arready  => axil_arready,
+        axil_rdata    => axil_rdata,
+        axil_rresp    => axil_rresp,
+        axil_rvalid   => axil_rvalid,
+        axil_rready   => axil_rready
+    );
+
+    -- Stimulus process
+    stim_proc: process
+        variable addr : std_logic_vector(ADDR_W-1 downto 0);
+        variable data : std_logic_vector(DATA_W-1 downto 0);
+        variable expected_data : std_logic_vector(DATA_W-1 downto 0);
+    begin
+        -- Wait for reset
+        wait until rst = {% if 'pos' in config['register_reset'] %}'0'{% else %}'1'{% endif %};
+        wait for CLK_PERIOD * 2;
+        
+        report "Starting testbench for {{ dut_name }}";
+        
+{% if rmap %}
+{% for reg in rmap %}
+        -- Test {{ reg.name }} register (address 0x{{ '%X' | format(reg.address) }})
+        report "Testing {{ reg.name }} register";
+        
+        -- Test reset values by reading
+        addr := CSR_{{ reg.name|upper }}_ADDR;
+        axil_araddr <= addr;
+        axil_arvalid <= '1';
+        axil_rready <= '1';
+        
+        wait until axil_arready = '1';
+        wait for CLK_PERIOD;
+        axil_arvalid <= '0';
+        
+        wait until axil_rvalid = '1';
+        data := axil_rdata;
+        wait for CLK_PERIOD;
+        axil_rready <= '0';
+        
+        expected_data := (others => '0');
+{% for bf in reg %}
+{% if bf.width > 1 %}
+        expected_data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB + CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH - 1 downto CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET;
+{% else %}
+        expected_data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET;
+{% endif %}
+{% endfor %}
+        
+        if data /= expected_data then
+            report "{{ reg.name }} reset value mismatch" severity error;
+            error_count <= error_count + 1;
+        else
+            report "{{ reg.name }} reset value correct";
+        end if;
+        
+        wait for CLK_PERIOD * 2;
+        
+{% set has_writable = False %}
+{% for bf in reg %}
+{% if bf.access in ['rw', 'wo'] %}
+{% set has_writable = True %}
+{% endif %}
+{% endfor %}
+{% if has_writable %}
+        -- Test write to {{ reg.name }} register
+        data := (others => '0');
+{% for bf in reg %}
+{% if bf.access in ['rw', 'wo'] %}
+{% if bf.width > 1 %}
+        data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB + CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH - 1 downto CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := std_logic_vector(to_unsigned({{ (2 ** bf.width - 1) if bf.width < 4 else 15 }}, CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH));
+{% else %}
+        data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := '1';
+{% endif %}
+{% endif %}
+{% endfor %}
+        
+        axil_awaddr <= addr;
+        axil_awvalid <= '1';
+        axil_wdata <= data;
+        axil_wstrb <= (others => '1');
+        axil_wvalid <= '1';
+        axil_bready <= '1';
+        
+        wait until axil_awready = '1';
+        wait for CLK_PERIOD;
+        axil_awvalid <= '0';
+        
+        wait until axil_wready = '1';
+        wait for CLK_PERIOD;
+        axil_wvalid <= '0';
+        
+        wait until axil_bvalid = '1';
+        wait for CLK_PERIOD;
+        axil_bready <= '0';
+        
+        if axil_bresp /= "00" then
+            report "{{ reg.name }} write response error" severity error;
+            error_count <= error_count + 1;
+        else
+            report "{{ reg.name }} write completed";
+        end if;
+        
+        wait for CLK_PERIOD * 2;
+        
+        -- Read back {{ reg.name }} register
+        axil_araddr <= addr;
+        axil_arvalid <= '1';
+        axil_rready <= '1';
+        
+        wait until axil_arready = '1';
+        wait for CLK_PERIOD;
+        axil_arvalid <= '0';
+        
+        wait until axil_rvalid = '1';
+        expected_data := data;
+        if axil_rdata /= expected_data then
+            report "{{ reg.name }} readback mismatch" severity error;
+            error_count <= error_count + 1;
+        else
+            report "{{ reg.name }} readback correct";
+        end if;
+        wait for CLK_PERIOD;
+        axil_rready <= '0';
+        
+        wait for CLK_PERIOD * 2;
+{% endif %}
+        
+{% endfor %}
+{% endif %}
+        
+        -- Report results
+        if error_count = 0 then
+            report "ALL TESTS PASSED" severity note;
+        else
+            report "TESTS FAILED with " & integer'image(error_count) & " errors" severity error;
+        end if;
+        
+        test_done <= true;
+        wait;
+    end process;
+
+    -- Timeout watchdog
+    timeout_proc: process
+    begin
+        wait for 50 us;
+        if not test_done then
+            report "TIMEOUT: Test did not complete" severity failure;
+            test_done <= true;
+        end if;
+        wait;
+    end process;
+
+end testbench;

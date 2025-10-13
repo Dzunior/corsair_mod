@@ -6,10 +6,10 @@ generate:
 	python3 generate.py
 
 simulate: generate
-	ghdl -a axil2lb.vhd
-	ghdl -a axil2lb_tb.vhd
-	ghdl -e axil2lb_tb
-	ghdl -r axil2lb_tb
+	ghdl -a regs.vhd
+	ghdl -a regs_tb.vhd
+	ghdl -e regs_tb
+	ghdl -r regs_tb
 
 clean:
-	rm -f *.vhd *.o *.cf axil2lb_tb
+	rm -f *.vhd *.o *.cf regs_tb

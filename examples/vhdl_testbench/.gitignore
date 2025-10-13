@@ -1,4 +1,4 @@
 *.vhd
 *.o
 *.cf
-axil2lb_tb
+regs_tb
