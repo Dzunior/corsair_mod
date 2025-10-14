@@ -19,7 +19,7 @@ architecture testbench of {{ tb_name }} is
         ADDR_W    : integer := {{ config['address_width'] }};
         DATA_W    : integer := {{ config['data_width'] }};
         STRB_W    : integer := {{ config['data_width'] // 8 }};
-        BASE_ADDR : std_logic_vector({{ config['address_width'] }}-1 downto 0) := x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
+        BASE_ADDR : std_logic_vector({{ config['address_width'] }}-1 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, {{ config['address_width'] }})){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
     );
     port(
         clk    : in std_logic;
@@ -80,11 +80,11 @@ architecture testbench of {{ tb_name }} is
     constant CLK_PERIOD : time := 10 ns;
 {% if rmap %}
 {% for reg in rmap %}
-    constant CSR_{{ reg.name|upper }}_ADDR : std_logic_vector(ADDR_W-1 downto 0) := x"{{ '%08X' | format(reg.address) if config['address_width'] <= 32 else '%016X' | format(reg.address) }}";
+    constant CSR_{{ reg.name|upper }}_ADDR : std_logic_vector(ADDR_W-1 downto 0) := std_logic_vector(to_unsigned({{ reg.address }}, ADDR_W));
 {% for bf in reg %}
     constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB : integer := {{ bf.lsb }};
     constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH : integer := {{ bf.width }};
-    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}std_logic_vector(to_unsigned({{ bf.reset }}, {{ bf.width }})){% else %}'{{ bf.reset }}'{% endif %};
+    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}{% if bf.reset >= 0 and bf.reset <= 2147483647 %}std_logic_vector(to_unsigned({{ bf.reset }}, {{ bf.width }})){% else %}x"{{ '%0*X' | format((bf.width + 3) // 4, bf.reset) }}"{% endif %}{% else %}'{{ bf.reset }}'{% endif %};
 {% endfor %}
 {% endfor %}
 {% endif %}
@@ -174,7 +174,7 @@ begin
         ADDR_W    => ADDR_W,
         DATA_W    => DATA_W,
         STRB_W    => STRB_W,
-        BASE_ADDR => x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
+        BASE_ADDR => {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, ADDR_W)){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
     )
     port map(
         clk           => clk,
