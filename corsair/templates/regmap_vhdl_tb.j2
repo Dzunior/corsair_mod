@@ -19,7 +19,7 @@ architecture testbench of {{ tb_name }} is
         ADDR_W    : integer := {{ config['address_width'] }};
         DATA_W    : integer := {{ config['data_width'] }};
         STRB_W    : integer := {{ config['data_width'] // 8 }};
-        BASE_ADDR : std_logic_vector(ADDR_W-1 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, {{ config['address_width'] }})){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
+        BASE_ADDR : std_logic_vector(31 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, 32)){% else %}x"{{ '%08X' | format(config['base_address']) }}"{% endif %}
     );
     port(
         clk    : in std_logic;
@@ -174,7 +174,7 @@ begin
         ADDR_W    => ADDR_W,
         DATA_W    => DATA_W,
         STRB_W    => STRB_W,
-        BASE_ADDR => {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, ADDR_W)){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
+        BASE_ADDR => {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, 32)){% else %}x"{{ '%08X' | format(config['base_address']) }}"{% endif %}
     )
     port map(
         clk           => clk,

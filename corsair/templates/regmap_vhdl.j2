@@ -228,7 +228,7 @@ generic(
     DATA_W : integer := {{ config['data_width'] }};
     {% if interface in ['axil', 'apb', 'amm'] %}
     STRB_W : integer := {{ config['data_width'] // 8 }};
-    BASE_ADDR : std_logic_vector(ADDR_W-1 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, {{ config['address_width'] }})){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
+    BASE_ADDR : std_logic_vector(31 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, 32)){% else %}x"{{ '%08X' | format(config['base_address']) }}"{% endif %}
     {% else %}
     STRB_W : integer := {{ config['data_width'] // 8 }}
     {% endif %}
@@ -373,7 +373,7 @@ begin
 
     {% if 'w' in reg.access %}
 {% if interface in ['axil','apb','amm'] %}
-{{ sig_csr_wen(reg) }} <= wen when (unsigned(waddr_absolute) = unsigned(BASE_ADDR) + to_unsigned({{ reg.address }}, ADDR_W)) else '0'; {{ literal_comment(reg.address) }}
+{{ sig_csr_wen(reg) }} <= wen when (unsigned(waddr_absolute) = unsigned(BASE_ADDR(ADDR_W-1 downto 0)) + to_unsigned({{ reg.address }}, ADDR_W)) else '0'; {{ literal_comment(reg.address) }}
 {% else %}
 {{ sig_csr_wen(reg) }} <= wen when (waddr = {{ literal(reg.address, "ADDR_W", width_is_param=1) }}) else '0'; {{ literal_comment(reg.address) }}
 {% endif %}
@@ -381,7 +381,7 @@ begin
 
     {% if 'r' in reg.access %}
 {% if interface in ['axil','apb','amm'] %}
-{{ sig_csr_ren(reg) }} <= ren when (unsigned(raddr_absolute) = unsigned(BASE_ADDR) + to_unsigned({{ reg.address }}, ADDR_W)) else '0'; {{ literal_comment(reg.address) }}
+{{ sig_csr_ren(reg) }} <= ren when (unsigned(raddr_absolute) = unsigned(BASE_ADDR(ADDR_W-1 downto 0)) + to_unsigned({{ reg.address }}, ADDR_W)) else '0'; {{ literal_comment(reg.address) }}
 {% else %}
 {{ sig_csr_ren(reg) }} <= ren when (raddr = {{ literal(reg.address, "ADDR_W", width_is_param=1) }}) else '0'; {{ literal_comment(reg.address) }}
 {% endif %}
@@ -545,7 +545,7 @@ wready <= '1';
         {% if interface in ['axil','apb','amm'] %}
         case unsigned(raddr_absolute) is
         {% for reg in rmap %}
-            when unsigned(BASE_ADDR) + to_unsigned({{ reg.address }}, ADDR_W) => {{ literal_comment(reg.address) }}
+            when unsigned(BASE_ADDR(ADDR_W-1 downto 0)) + to_unsigned({{ reg.address }}, ADDR_W) => {{ literal_comment(reg.address) }}
                 rdata_ff <= {{ sig_csr_rdata(reg) }};
         {% endfor %}
         {% else %}
