@@ -19,7 +19,7 @@ architecture testbench of {{ tb_name }} is
         ADDR_W    : integer := {{ config['address_width'] }};
         DATA_W    : integer := {{ config['data_width'] }};
         STRB_W    : integer := {{ config['data_width'] // 8 }};
-        BASE_ADDR : std_logic_vector({{ config['address_width'] }}-1 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, {{ config['address_width'] }})){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
+        BASE_ADDR : std_logic_vector(ADDR_W-1 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, {{ config['address_width'] }})){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
     );
     port(
         clk    : in std_logic;
@@ -30,21 +30,21 @@ architecture testbench of {{ tb_name }} is
 {% for bf in reg %}
 {% if bf.access in ['rw', 'wo'] %}
 {% if bf.hardware in ['o', 'oe', 'ol'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
 {% endif %}
 {% if bf.hardware in ['oe', 'ioe'] %}
         csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
 {% endif %}
 {% if bf.hardware in ['ioea'] %}
         csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
         csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : out std_logic;
 {% endif %}
 {% endif %}
 {% if bf.access == 'ro' %}
 {% if bf.hardware in ['i', 'ie'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
 {% endif %}
 {% endif %}
 {% endfor %}
@@ -99,21 +99,21 @@ architecture testbench of {{ tb_name }} is
 {% for bf in reg %}
 {% if bf.access in ['rw', 'wo'] %}
 {% if bf.hardware in ['o', 'oe', 'ol'] %}
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %};
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
 {% endif %}
 {% if bf.hardware in ['oe', 'ioe'] %}
     signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
 {% endif %}
 {% if bf.hardware in ['ioea'] %}
     signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
     signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : std_logic;
 {% endif %}
 {% endif %}
 {% if bf.access == 'ro' %}
 {% if bf.hardware in ['i', 'ie'] %}
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% else %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% endif %};
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% else %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% endif %};
 {% endif %}
 {% endif %}
 {% endfor %}
