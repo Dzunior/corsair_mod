@@ -3,8 +3,8 @@
 
 """Example of generating VHDL testbench for register map module
 
-This example demonstrates how to use the VhdlTestbench generator
-to create a testbench for a register map module with AXI-Lite interface.
+This example demonstrates how to use automatic testbench generation
+when creating a register map module with AXI-Lite interface.
 """
 
 import sys
@@ -34,27 +34,24 @@ rmap.add_registers([
     ]),
 ])
 
-# Generate the register map module with AXI-Lite interface
 print("Generating register map module with AXI-Lite interface...")
+print("(with automatic testbench generation)")
+
+# Generate the register map module with AXI-Lite interface
+# The testbench is generated automatically when generate_testbench=True
 generators.Vhdl(
     rmap,
     path='regs.vhd',
-    interface='axil'
+    interface='axil',
+    generate_testbench=True  # This automatically generates regs_tb.vhd
 ).generate()
-print("  -> Generated: regs.vhd")
 
-# Generate the testbench for the register map module
-print("\nGenerating testbench...")
-generators.VhdlTestbench(
-    rmap,
-    path='regs_tb.vhd',
-    dut_file='regs.vhd',
-    interface='axil'
-).generate()
-print("  -> Generated: regs_tb.vhd")
+print("  -> Generated: regs.vhd")
+print("  -> Generated: regs_tb.vhd (automatically)")
 
 print("\nDone! You can now simulate the design using:")
 print("  ghdl -a regs.vhd")
 print("  ghdl -a regs_tb.vhd")
 print("  ghdl -e regs_tb")
 print("  ghdl -r regs_tb")
+

@@ -99,6 +99,26 @@ class TestVhdl:
         assert "if raddr =" in raw_str
         assert 'end architecture;' in raw_str
 
+    def test_vhdl_auto_testbench(self, tmpdir):
+        """Test of automatic testbench generation with VHDL module."""
+        output_file = str(tmpdir.join('regs.vhd'))
+        tb_file = str(tmpdir.join('regs_tb.vhd'))
+        print('output_file:', output_file)
+        print('testbench_file:', tb_file)
+        # create regmap
+        rmap = utils.create_template()
+        # write output file with automatic testbench generation
+        generators.Vhdl(rmap, output_file, interface='axil', generate_testbench=True).generate()
+        # verify both files exist
+        assert tmpdir.join('regs.vhd').check()
+        assert tmpdir.join('regs_tb.vhd').check()
+        # verify testbench content
+        with open(tb_file, 'r') as f:
+            tb_str = ''.join(f.readlines())
+        assert 'Testbench for regs' in tb_str
+        assert 'component regs' in tb_str
+        assert 'Test' in tb_str  # Should have test cases
+
 
 class TestVerilogHeader:
     """Class 'generators.VerilogHeader' testing."""

@@ -284,18 +284,27 @@ class Vhdl(Generator, Jinja2):
     :type read_filler: int
     :param interface: Register map bus protocol. Use one of: `axil`, `apb`, `amm`, `lb`
     :type interface: str
+    :param generate_testbench: If True, automatically generate a testbench for the module (only for axil interface)
+    :type generate_testbench: bool
+    :param testbench_path: Path for the testbench file (if generate_testbench is True)
+    :type testbench_path: str
     """
 
-    def __init__(self, rmap=None, path='regs.vhd', read_filler=0, interface='axil', **args):
+    def __init__(self, rmap=None, path='regs.vhd', read_filler=0, interface='axil', generate_testbench=False, testbench_path=None, **args):
         super().__init__(rmap, **args)
         self.path = path
         self.read_filler = read_filler
         self.interface = interface
+        self.generate_testbench = generate_testbench
+        self.testbench_path = testbench_path
 
     def validate(self):
         super().validate()
         assert self.interface in ['axil', 'apb', 'amm', 'lb'], \
             "Unknown '%s' interface!" % (self.interface)
+        if self.generate_testbench:
+            assert self.interface == 'axil', \
+                "Testbench generation is currently only supported for 'axil' interface, '%s' was provided!" % (self.interface)
 
     def generate(self):
         # validate parameters
@@ -311,6 +320,24 @@ class Vhdl(Generator, Jinja2):
         j2_vars['config'] = config.globcfg
         # render
         self.render_to_file(j2_template, j2_vars, self.path)
+        
+        # Generate testbench if requested
+        if self.generate_testbench:
+            # Determine testbench path if not provided
+            if self.testbench_path is None:
+                # Replace .vhd extension with _tb.vhd
+                import os
+                base_name = os.path.splitext(self.path)[0]
+                self.testbench_path = base_name + '_tb.vhd'
+            
+            # Create and run testbench generator with same configuration
+            tb_gen = VhdlTestbench(
+                rmap=self.rmap,
+                path=self.testbench_path,
+                dut_file=self.path,
+                interface=self.interface
+            )
+            tb_gen.generate()
 
 
 class VerilogHeader(Generator, Jinja2):
