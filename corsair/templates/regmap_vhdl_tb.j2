@@ -24,32 +24,48 @@ architecture testbench of {{ tb_name }} is
     port(
         clk    : in std_logic;
         rst    : in std_logic;
-{% if rmap %}
 {% for reg in rmap %}
-        -- {{ reg.name }} register signals
-{% for bf in reg %}
-{% if bf.access in ['rw', 'wo'] %}
-{% if bf.hardware in ['o', 'oe', 'ol'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
-{% endif %}
-{% if bf.hardware in ['oe', 'ioe'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
-{% endif %}
-{% if bf.hardware in ['ioea'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+    {% for bf in reg %}
+        -- {{ reg.name }}.{{ bf.name }}
+        {% if 'a' in bf.hardware %}
+            {% if 'i' in bf.hardware %}
         csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : out std_logic;
-{% endif %}
-{% endif %}
-{% if bf.access == 'ro' %}
-{% if bf.hardware in ['i', 'ie'] %}
+            {% endif %}
+            {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess : out std_logic;
+            {% endif %}
+        {% endif %}
+        {% if 'l' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock : in std_logic;
+        {% endif %}
+        {% if 'e' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
+        {% endif %}
+        {% if 'c' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr : in std_logic;
+        {% endif %}
+        {% if 's' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set : in std_logic;
+        {% endif %}
+        {% if 'q' in bf.hardware and 'r' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid : in std_logic;
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren : out std_logic;
         csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
-{% endif %}
-{% endif %}
+        {% endif %}
+        {% if 'i' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        {% endif %}
+        {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        {% endif %}
+        {% if 'q' in bf.hardware and  'w' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready : in std_logic;
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen : out std_logic;
+        {% endif %}
+    {% endfor %}
+
 {% endfor %}
-{% endfor %}
-{% endif %}
         -- AXI-Lite
         axil_awaddr   : in  std_logic_vector(ADDR_W-1 downto 0);
         axil_awprot   : in  std_logic_vector(2 downto 0);
@@ -93,32 +109,48 @@ architecture testbench of {{ tb_name }} is
     signal clk : std_logic := '0';
     signal rst : std_logic := {% if 'pos' in config['register_reset'] %}'1'{% else %}'0'{% endif %};
     
-{% if rmap %}
 {% for reg in rmap %}
-    -- {{ reg.name }} register signals
-{% for bf in reg %}
-{% if bf.access in ['rw', 'wo'] %}
-{% if bf.hardware in ['o', 'oe', 'ol'] %}
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
-{% endif %}
-{% if bf.hardware in ['oe', 'ioe'] %}
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
-{% endif %}
-{% if bf.hardware in ['ioea'] %}
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
-    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}(others => '0'){% else %}'0'{% endif %};
+    {% for bf in reg %}
+    -- {{ reg.name }}.{{ bf.name }} register signals
+        {% if 'a' in bf.hardware %}
+            {% if 'i' in bf.hardware %}
     signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : std_logic;
-{% endif %}
-{% endif %}
-{% if bf.access == 'ro' %}
-{% if bf.hardware in ['i', 'ie'] %}
+            {% endif %}
+            {% if 'o' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess : std_logic;
+            {% endif %}
+        {% endif %}
+        {% if 'l' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock : std_logic := '0';
+        {% endif %}
+        {% if 'e' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
+        {% endif %}
+        {% if 'c' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr : std_logic := '0';
+        {% endif %}
+        {% if 's' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set : std_logic := '0';
+        {% endif %}
+        {% if 'q' in bf.hardware and 'r' in bf.access %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid : std_logic := '0';
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren : std_logic;
     signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% else %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% endif %};
-{% endif %}
-{% endif %}
+        {% endif %}
+        {% if 'i' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% else %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% endif %};
+        {% endif %}
+        {% if 'o' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        {% endif %}
+        {% if 'q' in bf.hardware and  'w' in bf.access %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready : std_logic := '1';
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen : std_logic;
+        {% endif %}
+    {% endfor %}
+
 {% endfor %}
-{% endfor %}
-{% endif %}
 
     -- AXI-Lite signals
     signal axil_awaddr  : std_logic_vector(ADDR_W-1 downto 0) := (others => '0');
@@ -179,32 +211,48 @@ begin
     port map(
         clk           => clk,
         rst           => rst,
-{% if rmap %}
 {% for reg in rmap %}
-        -- {{ reg.name }} register signals
-{% for bf in reg %}
-{% if bf.access in ['rw', 'wo'] %}
-{% if bf.hardware in ['o', 'oe', 'ol'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out,
-{% endif %}
-{% if bf.hardware in ['oe', 'ioe'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en,
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
-{% endif %}
-{% if bf.hardware in ['ioea'] %}
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en,
-        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
+    {% for bf in reg %}
+        -- {{ reg.name }}.{{ bf.name }}
+        {% if 'a' in bf.hardware %}
+            {% if 'i' in bf.hardware %}
         csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess,
-{% endif %}
-{% endif %}
-{% if bf.access == 'ro' %}
-{% if bf.hardware in ['i', 'ie'] %}
+            {% endif %}
+            {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess,
+            {% endif %}
+        {% endif %}
+        {% if 'l' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock,
+        {% endif %}
+        {% if 'e' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en,
+        {% endif %}
+        {% if 'c' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr,
+        {% endif %}
+        {% if 's' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set,
+        {% endif %}
+        {% if 'q' in bf.hardware and 'r' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren,
         csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
-{% endif %}
-{% endif %}
+        {% endif %}
+        {% if 'i' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
+        {% endif %}
+        {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out,
+        {% endif %}
+        {% if 'q' in bf.hardware and  'w' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen,
+        {% endif %}
+    {% endfor %}
+
 {% endfor %}
-{% endfor %}
-{% endif %}
         axil_awaddr   => axil_awaddr,
         axil_awprot   => axil_awprot,
         axil_awvalid  => axil_awvalid,
