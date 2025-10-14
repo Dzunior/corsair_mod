@@ -414,7 +414,6 @@ begin
         wait for 50 us;
         if not test_done then
             report "TIMEOUT: Test did not complete" severity failure;
-            test_done <= true;
         end if;
         wait;
     end process;
