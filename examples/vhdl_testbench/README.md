@@ -1,10 +1,10 @@
 # VHDL Testbench Generation Example
 
-This example demonstrates how to generate a VHDL testbench for a register map module with AXI-Lite interface using automatic testbench generation.
+This example demonstrates automatic VHDL testbench generation for register map modules with AXI-Lite interface.
 
 ## Overview
 
-The Corsair tool can now automatically generate VHDL testbenches when creating register map modules with AXI-Lite interfaces. This makes it easier to verify the functionality of generated designs with automated tests.
+The Corsair tool automatically generates VHDL testbenches when creating register map modules with AXI-Lite interfaces. This makes it easier to verify the functionality of generated designs with automated tests.
 
 ## Usage
 
@@ -20,7 +20,9 @@ This will generate two files:
 
 ## Automatic Testbench Generation
 
-The testbench is generated automatically when you set `generate_testbench=True`:
+**Testbenches are automatically generated for AXI-Lite interfaces!**
+
+When you generate a VHDL register map module with `interface='axil'`, the testbench is automatically created:
 
 ```python
 from corsair import generators, RegisterMap, Register, BitField
@@ -29,13 +31,13 @@ from corsair import generators, RegisterMap, Register, BitField
 rmap = RegisterMap()
 rmap.add_registers([...])
 
-# Generate module with automatic testbench generation
+# Generate module with axil interface
 generators.Vhdl(
     rmap,
     path='regs.vhd',
-    interface='axil',
-    generate_testbench=True  # Automatically generates regs_tb.vhd
+    interface='axil'  # Testbench auto-generated for axil!
 ).generate()
+# Result: both regs.vhd and regs_tb.vhd are generated
 ```
 
 The testbench will automatically:
@@ -44,6 +46,21 @@ The testbench will automatically:
 - Test reset values, write operations, and read operations
 - Be saved with a `_tb` suffix (e.g., `regs.vhd` → `regs_tb.vhd`)
 
+### Disabling Automatic Generation
+
+To disable automatic testbench generation for axil interface:
+
+```python
+generators.Vhdl(
+    rmap,
+    path='regs.vhd',
+    interface='axil',
+    generate_testbench=False  # Explicitly disable
+).generate()
+```
+
+### Custom Testbench Path
+
 You can also specify a custom testbench path:
 
 ```python
@@ -51,7 +68,6 @@ generators.Vhdl(
     rmap,
     path='my_regs.vhd',
     interface='axil',
-    generate_testbench=True,
     testbench_path='my_custom_testbench.vhd'
 ).generate()
 ```
@@ -91,6 +107,16 @@ The generated testbench includes:
 6. **Timeout watchdog** - Prevents hanging simulations
 7. **Same configuration** - Uses the same data width, address width, and reset polarity as the module
 
+## Using with Command Line
+
+When using the command-line interface (`python3 -m corsair`), testbenches are automatically generated for VHDL modules with AXI-Lite interface. No additional configuration is needed!
+
+```bash
+# In a directory with csrconfig and regs.json:
+python3 -m corsair
+# Result: Both regs.vhd and regs_tb.vhd are generated automatically
+```
+
 ## Using with Other Tools
 
 The testbench can also be simulated with:
@@ -102,13 +128,13 @@ For other simulators, adjust the compilation and simulation commands accordingly
 
 ## Manual Testbench Generation
 
-If you prefer to generate the testbench separately, you can still use the `VhdlTestbench` generator:
+If you prefer to generate the testbench separately (for non-axil interfaces or advanced use cases), you can still use the `VhdlTestbench` generator:
 
 ```python
 from corsair import generators
 
 # Generate module
-generators.Vhdl(rmap, path='regs.vhd', interface='axil').generate()
+generators.Vhdl(rmap, path='regs.vhd', interface='axil', generate_testbench=False).generate()
 
 # Generate testbench separately
 generators.VhdlTestbench(

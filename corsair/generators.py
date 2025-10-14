@@ -284,18 +284,22 @@ class Vhdl(Generator, Jinja2):
     :type read_filler: int
     :param interface: Register map bus protocol. Use one of: `axil`, `apb`, `amm`, `lb`
     :type interface: str
-    :param generate_testbench: If True, automatically generate a testbench for the module (only for axil interface)
-    :type generate_testbench: bool
+    :param generate_testbench: If True, automatically generate a testbench for the module. If None (default), automatically enables for axil interface.
+    :type generate_testbench: bool or None
     :param testbench_path: Path for the testbench file (if generate_testbench is True)
     :type testbench_path: str
     """
 
-    def __init__(self, rmap=None, path='regs.vhd', read_filler=0, interface='axil', generate_testbench=False, testbench_path=None, **args):
+    def __init__(self, rmap=None, path='regs.vhd', read_filler=0, interface='axil', generate_testbench=None, testbench_path=None, **args):
         super().__init__(rmap, **args)
         self.path = path
         self.read_filler = read_filler
         self.interface = interface
-        self.generate_testbench = generate_testbench
+        # Auto-enable testbench generation for axil interface if not explicitly set
+        if generate_testbench is None:
+            self.generate_testbench = (interface == 'axil')
+        else:
+            self.generate_testbench = generate_testbench
         self.testbench_path = testbench_path
 
     def validate(self):
