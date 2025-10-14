@@ -13,9 +13,9 @@
 {%- endmacro %}
 
 {#- vector range for declarations #}
-{% macro range_decl(msb, is_vector=true) %}
+{% macro range_decl(msb, is_vector=true, bf_width=0) %}
     {% if is_vector %}
-std_logic_vector({{ msb }} downto 0)
+std_logic_vector({% if bf_width > 0 and bf_width == config['data_width'] %}DATA_W-1{% else %}{{ msb }}{% endif %} downto 0)
     {%- else %}
 std_logic
     {%- endif %}
@@ -228,7 +228,7 @@ generic(
     DATA_W : integer := {{ config['data_width'] }};
     {% if interface in ['axil', 'apb', 'amm'] %}
     STRB_W : integer := {{ config['data_width'] // 8 }};
-    BASE_ADDR : std_logic_vector({{ config['address_width'] }}-1 downto 0) := x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
+    BASE_ADDR : std_logic_vector(ADDR_W-1 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, {{ config['address_width'] }})){% else %}x"{{ '%0*X' | format((config['address_width'] + 3) // 4, config['base_address']) }}"{% endif %}
     {% else %}
     STRB_W : integer := {{ config['data_width'] // 8 }}
     {% endif %}
@@ -262,16 +262,16 @@ port(
         {% if 'q' in bf.hardware and 'r' in bf.access %}
     {{ port_bf_rvalid(reg, bf) }} : in {{range_decl(0, False)}};
     {{ port_bf_ren(reg, bf) }} : out {{range_decl(0, False)}};
-    {{ port_bf_in(reg, bf) }} : in {{ range_decl(bf.width - 1, bf.is_vector()) }};
+    {{ port_bf_in(reg, bf) }} : in {{ range_decl(bf.width - 1, bf.is_vector(), bf.width) }};
         {% endif %}
         {% if 'i' in bf.hardware %}
-    {{ port_bf_in(reg, bf) }} : in {{ range_decl(bf.width - 1, bf.is_vector()) }};
+    {{ port_bf_in(reg, bf) }} : in {{ range_decl(bf.width - 1, bf.is_vector(), bf.width) }};
         {% endif %}
         {% if 'o' in bf.hardware %}
-    {{ port_bf_out(reg, bf) }} : out {{ range_decl(bf.width - 1, bf.is_vector()) }};
+    {{ port_bf_out(reg, bf) }} : out {{ range_decl(bf.width - 1, bf.is_vector(), bf.width) }};
         {% endif %}
         {% if 'q' in bf.hardware and  'w' in bf.access %}
-    {{ port_bf_out(reg, bf) }} : out {{ range_decl(bf.width - 1, bf.is_vector()) }};
+    {{ port_bf_out(reg, bf) }} : out {{ range_decl(bf.width - 1, bf.is_vector(), bf.width) }};
     {{ port_bf_wready(reg, bf) }} : in {{range_decl(0, False)}};
     {{ port_bf_wen(reg, bf) }} : out {{range_decl(0, False)}};
         {% endif %}
@@ -318,7 +318,7 @@ signal {{ sig_csr_ren(reg) }} : {{ range_decl(0, False) }};
 signal {{ sig_csr_ren_ff(reg) }} : {{ range_decl(0, False) }};
     {% endif %}
     {% for bf in reg %}
-signal {{ sig_bf_ff(reg, bf) }} : {{ range_decl(bf.width - 1, bf.is_vector()) }};
+signal {{ sig_bf_ff(reg, bf) }} : {{ range_decl(bf.width - 1, bf.is_vector(), bf.width) }};
         {% if 'r' in bf.access and 'q' in bf.hardware %}
 signal {{ sig_bf_rvalid_ff(reg, bf) }} : {{ range_decl(0, False) }};
         {% endif %}
