@@ -274,6 +274,85 @@ begin
         axil_rready   => axil_rready
     );
 
+    -- AXI-Lite write procedure
+    procedure axil_write(
+        constant addr : in std_logic_vector(ADDR_W-1 downto 0);
+        constant data : in std_logic_vector(DATA_W-1 downto 0);
+        constant strb : in std_logic_vector(STRB_W-1 downto 0) := (others => '1');
+        signal awaddr  : out std_logic_vector(ADDR_W-1 downto 0);
+        signal awvalid : out std_logic;
+        signal awready : in std_logic;
+        signal wdata   : out std_logic_vector(DATA_W-1 downto 0);
+        signal wstrb   : out std_logic_vector(STRB_W-1 downto 0);
+        signal wvalid  : out std_logic;
+        signal wready  : in std_logic;
+        signal bresp   : in std_logic_vector(1 downto 0);
+        signal bvalid  : in std_logic;
+        signal bready  : out std_logic
+    ) is
+    begin
+        -- Write address phase
+        awaddr <= addr;
+        awvalid <= '1';
+        wdata <= data;
+        wstrb <= strb;
+        wvalid <= '1';
+        bready <= '1';
+        
+        wait until awready = '1';
+        wait for CLK_PERIOD;
+        awvalid <= '0';
+        
+        wait until wready = '1';
+        wait for CLK_PERIOD;
+        wvalid <= '0';
+        
+        wait until bvalid = '1';
+        wait for CLK_PERIOD;
+        bready <= '0';
+        
+        if bresp /= "00" then
+            report "AXI-Lite write error response: " & integer'image(to_integer(unsigned(bresp))) severity error;
+        end if;
+        
+        wait for CLK_PERIOD;
+    end procedure;
+    
+    -- AXI-Lite read procedure
+    procedure axil_read(
+        constant addr : in std_logic_vector(ADDR_W-1 downto 0);
+        variable data : out std_logic_vector(DATA_W-1 downto 0);
+        signal araddr  : out std_logic_vector(ADDR_W-1 downto 0);
+        signal arvalid : out std_logic;
+        signal arready : in std_logic;
+        signal rdata   : in std_logic_vector(DATA_W-1 downto 0);
+        signal rresp   : in std_logic_vector(1 downto 0);
+        signal rvalid  : in std_logic;
+        signal rready  : out std_logic
+    ) is
+    begin
+        -- Read address phase
+        araddr <= addr;
+        arvalid <= '1';
+        rready <= '1';
+        
+        wait until arready = '1';
+        wait for CLK_PERIOD;
+        arvalid <= '0';
+        
+        -- Read data phase
+        wait until rvalid = '1';
+        data := rdata;
+        wait for CLK_PERIOD;
+        rready <= '0';
+        
+        if rresp /= "00" then
+            report "AXI-Lite read error response: " & integer'image(to_integer(unsigned(rresp))) severity error;
+        end if;
+        
+        wait for CLK_PERIOD;
+    end procedure;
+
     -- Stimulus process
     stim_proc: process
         variable addr : std_logic_vector(ADDR_W-1 downto 0);
@@ -293,18 +372,8 @@ begin
         
         -- Test reset values by reading
         addr := CSR_{{ reg.name|upper }}_ADDR;
-        axil_araddr <= addr;
-        axil_arvalid <= '1';
-        axil_rready <= '1';
-        
-        wait until axil_arready = '1';
-        wait for CLK_PERIOD;
-        axil_arvalid <= '0';
-        
-        wait until axil_rvalid = '1';
-        data := axil_rdata;
-        wait for CLK_PERIOD;
-        axil_rready <= '0';
+        axil_read(addr, data, axil_araddr, axil_arvalid, axil_arready,
+                  axil_rdata, axil_rresp, axil_rvalid, axil_rready);
         
         expected_data := (others => '0');
 {% for bf in reg %}
@@ -343,53 +412,24 @@ begin
 {% endif %}
 {% endfor %}
         
-        axil_awaddr <= addr;
-        axil_awvalid <= '1';
-        axil_wdata <= data;
-        axil_wstrb <= (others => '1');
-        axil_wvalid <= '1';
-        axil_bready <= '1';
+        axil_write(addr, data, (others => '1'), axil_awaddr, axil_awvalid, axil_awready,
+                   axil_wdata, axil_wstrb, axil_wvalid, axil_wready,
+                   axil_bresp, axil_bvalid, axil_bready);
         
-        wait until axil_awready = '1';
-        wait for CLK_PERIOD;
-        axil_awvalid <= '0';
-        
-        wait until axil_wready = '1';
-        wait for CLK_PERIOD;
-        axil_wvalid <= '0';
-        
-        wait until axil_bvalid = '1';
-        wait for CLK_PERIOD;
-        axil_bready <= '0';
-        
-        if axil_bresp /= "00" then
-            report "{{ reg.name }} write response error" severity error;
-            error_count <= error_count + 1;
-        else
-            report "{{ reg.name }} write completed";
-        end if;
+        report "{{ reg.name }} write completed";
         
         wait for CLK_PERIOD * 2;
         
         -- Read back {{ reg.name }} register
-        axil_araddr <= addr;
-        axil_arvalid <= '1';
-        axil_rready <= '1';
+        axil_read(addr, expected_data, axil_araddr, axil_arvalid, axil_arready,
+                  axil_rdata, axil_rresp, axil_rvalid, axil_rready);
         
-        wait until axil_arready = '1';
-        wait for CLK_PERIOD;
-        axil_arvalid <= '0';
-        
-        wait until axil_rvalid = '1';
-        expected_data := data;
-        if axil_rdata /= expected_data then
+        if expected_data /= data then
             report "{{ reg.name }} readback mismatch" severity error;
             error_count <= error_count + 1;
         else
             report "{{ reg.name }} readback correct";
         end if;
-        wait for CLK_PERIOD;
-        axil_rready <= '0';
         
         wait for CLK_PERIOD * 2;
 {% endif %}
