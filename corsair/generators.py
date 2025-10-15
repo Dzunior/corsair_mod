@@ -284,18 +284,31 @@ class Vhdl(Generator, Jinja2):
     :type read_filler: int
     :param interface: Register map bus protocol. Use one of: `axil`, `apb`, `amm`, `lb`
     :type interface: str
+    :param generate_testbench: If True, automatically generate a testbench for the module. If None (default), automatically enables for axil interface.
+    :type generate_testbench: bool or None
+    :param testbench_path: Path for the testbench file (if generate_testbench is True)
+    :type testbench_path: str
     """
 
-    def __init__(self, rmap=None, path='regs.vhd', read_filler=0, interface='axil', **args):
+    def __init__(self, rmap=None, path='regs.vhd', read_filler=0, interface='axil', generate_testbench=None, testbench_path=None, **args):
         super().__init__(rmap, **args)
         self.path = path
         self.read_filler = read_filler
         self.interface = interface
+        # Auto-enable testbench generation for axil interface if not explicitly set
+        if generate_testbench is None:
+            self.generate_testbench = (interface == 'axil')
+        else:
+            self.generate_testbench = generate_testbench
+        self.testbench_path = testbench_path
 
     def validate(self):
         super().validate()
         assert self.interface in ['axil', 'apb', 'amm', 'lb'], \
             "Unknown '%s' interface!" % (self.interface)
+        if self.generate_testbench:
+            assert self.interface == 'axil', \
+                "Testbench generation is currently only supported for 'axil' interface, '%s' was provided!" % (self.interface)
 
     def generate(self):
         # validate parameters
@@ -311,6 +324,24 @@ class Vhdl(Generator, Jinja2):
         j2_vars['config'] = config.globcfg
         # render
         self.render_to_file(j2_template, j2_vars, self.path)
+        
+        # Generate testbench if requested
+        if self.generate_testbench:
+            # Determine testbench path if not provided
+            if self.testbench_path is None:
+                # Replace .vhd extension with _tb.vhd
+                import os
+                base_name = os.path.splitext(self.path)[0]
+                self.testbench_path = base_name + '_tb.vhd'
+            
+            # Create and run testbench generator with same configuration
+            tb_gen = VhdlTestbench(
+                rmap=self.rmap,
+                path=self.testbench_path,
+                dut_file=self.path,
+                interface=self.interface
+            )
+            tb_gen.generate()
 
 
 class VerilogHeader(Generator, Jinja2):
@@ -484,6 +515,46 @@ class LbBridgeVhdl(Generator, Jinja2):
         j2_vars = {}
         j2_vars['corsair_ver'] = __version__
         j2_vars['module_name'] = utils.get_file_name(self.path)
+        j2_vars['config'] = config.globcfg
+        # render
+        self.render_to_file(j2_template, j2_vars, self.path)
+
+
+class VhdlTestbench(Generator, Jinja2):
+    """Create VHDL testbench for register map module with AXI-Lite interface.
+
+    :param rmap: Register map object
+    :type rmap: :class:`corsair.RegisterMap`
+    :param path: Path to the output testbench file
+    :type path: str
+    :param dut_file: Path to the DUT VHDL file (used to extract module name)
+    :type dut_file: str
+    :param interface: Register map bus protocol. Currently only 'axil' is supported.
+    :type interface: str
+    """
+
+    def __init__(self, rmap=None, path='regs_tb.vhd', dut_file='regs.vhd', interface='axil', **args):
+        super().__init__(rmap, **args)
+        self.path = path
+        self.dut_file = dut_file
+        self.interface = interface
+
+    def validate(self):
+        super().validate()
+        assert self.interface in ['axil'], \
+            "Only 'axil' interface is currently supported for testbench generation, '%s' was provided!" % (self.interface)
+
+    def generate(self):
+        # validate parameters
+        self.validate()
+        # prepare jinja2
+        if self.interface == 'axil':
+            j2_template = 'regmap_vhdl_tb.j2'
+        j2_vars = {}
+        j2_vars['corsair_ver'] = __version__
+        j2_vars['tb_name'] = utils.get_file_name(self.path)
+        j2_vars['dut_name'] = utils.get_file_name(self.dut_file)
+        j2_vars['rmap'] = self.rmap
         j2_vars['config'] = config.globcfg
         # render
         self.render_to_file(j2_template, j2_vars, self.path)

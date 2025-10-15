@@ -1,0 +1,4 @@
+*.vhd
+*.o
+*.cf
+regs_tb

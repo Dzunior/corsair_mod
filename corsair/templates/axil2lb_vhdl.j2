@@ -188,15 +188,15 @@ signal addr_in_range_r : std_logic;
 
 begin
 
+{% macro axil_core() %}
 -- Address translation: Convert AXI absolute addresses to local bus relative addresses
-waddr_relative <= std_logic_vector(unsigned(waddr_absolute) - unsigned(BASE_ADDR));
-raddr_relative <= std_logic_vector(unsigned(raddr_absolute) - unsigned(BASE_ADDR));
+waddr_relative <= std_logic_vector(unsigned(waddr_absolute) - unsigned(BASE_ADDR(ADDR_W-1 downto 0)));
+raddr_relative <= std_logic_vector(unsigned(raddr_absolute) - unsigned(BASE_ADDR(ADDR_W-1 downto 0)));
 
 -- Address range checking (optional - can be used for error responses)
-addr_in_range_w <= '1' when unsigned(waddr_absolute) >= unsigned(BASE_ADDR) else '0';
-addr_in_range_r <= '1' when unsigned(raddr_absolute) >= unsigned(BASE_ADDR) else '0';
+addr_in_range_w <= '1' when unsigned(waddr_absolute) >= unsigned(BASE_ADDR(ADDR_W-1 downto 0)) else '0';
+addr_in_range_r <= '1' when unsigned(raddr_absolute) >= unsigned(BASE_ADDR(ADDR_W-1 downto 0)) else '0';
 
-{% macro axil_core() %}
 axil_awready <= not awflag;
 axil_wready  <= not wflag;
 axil_bvalid  <= axil_bvalid_int;

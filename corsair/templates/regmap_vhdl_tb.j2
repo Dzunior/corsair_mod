@@ -1,0 +1,461 @@
+{#- VHDL Testbench template for register map with AXI-Lite interface #}
+-- Created with Corsair v{{ corsair_ver }}
+--
+-- Testbench for {{ dut_name }}
+--
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity {{ tb_name }} is
+end {{ tb_name }};
+
+architecture testbench of {{ tb_name }} is
+
+    -- Component declaration
+    component {{ dut_name }}
+    generic(
+        ADDR_W    : integer := {{ config['address_width'] }};
+        DATA_W    : integer := {{ config['data_width'] }};
+        STRB_W    : integer := {{ config['data_width'] // 8 }};
+        BASE_ADDR : std_logic_vector(31 downto 0) := {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, 32)){% else %}x"{{ '%08X' | format(config['base_address']) }}"{% endif %}
+    );
+    port(
+        clk    : in std_logic;
+        rst    : in std_logic;
+{% for reg in rmap %}
+    {% for bf in reg %}
+        -- {{ reg.name }}.{{ bf.name }}
+        {% if 'a' in bf.hardware %}
+            {% if 'i' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : out std_logic;
+            {% endif %}
+            {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess : out std_logic;
+            {% endif %}
+        {% endif %}
+        {% if 'l' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock : in std_logic;
+        {% endif %}
+        {% if 'e' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : in std_logic;
+        {% endif %}
+        {% if 'c' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr : in std_logic;
+        {% endif %}
+        {% if 's' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set : in std_logic;
+        {% endif %}
+        {% if 'q' in bf.hardware and 'r' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid : in std_logic;
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren : out std_logic;
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        {% endif %}
+        {% if 'i' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : in std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        {% endif %}
+        {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        {% endif %}
+        {% if 'q' in bf.hardware and  'w' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : out std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready : in std_logic;
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen : out std_logic;
+        {% endif %}
+    {% endfor %}
+
+{% endfor %}
+        -- AXI-Lite
+        axil_awaddr   : in  std_logic_vector(ADDR_W-1 downto 0);
+        axil_awprot   : in  std_logic_vector(2 downto 0);
+        axil_awvalid  : in  std_logic;
+        axil_awready  : out std_logic;
+        axil_wdata    : in  std_logic_vector(DATA_W-1 downto 0);
+        axil_wstrb    : in  std_logic_vector(STRB_W-1 downto 0);
+        axil_wvalid   : in  std_logic;
+        axil_wready   : out std_logic;
+        axil_bresp    : out std_logic_vector(1 downto 0);
+        axil_bvalid   : out std_logic;
+        axil_bready   : in  std_logic;
+        axil_araddr   : in  std_logic_vector(ADDR_W-1 downto 0);
+        axil_arprot   : in  std_logic_vector(2 downto 0);
+        axil_arvalid  : in  std_logic;
+        axil_arready  : out std_logic;
+        axil_rdata    : out std_logic_vector(DATA_W-1 downto 0);
+        axil_rresp    : out std_logic_vector(1 downto 0);
+        axil_rvalid   : out std_logic;
+        axil_rready   : in  std_logic
+    );
+    end component;
+
+    -- Constants
+    constant ADDR_W : integer := {{ config['address_width'] }};
+    constant DATA_W : integer := {{ config['data_width'] }};
+    constant STRB_W : integer := {{ config['data_width'] // 8 }};
+    constant CLK_PERIOD : time := 10 ns;
+{% if rmap %}
+{% for reg in rmap %}
+    constant CSR_{{ reg.name|upper }}_ADDR : std_logic_vector(ADDR_W-1 downto 0) := std_logic_vector(to_unsigned({{ reg.address }}, ADDR_W));
+{% for bf in reg %}
+    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB : integer := {{ bf.lsb }};
+    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH : integer := {{ bf.width }};
+    constant CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET : std_logic{% if bf.width > 1 %}_vector({{ bf.width - 1 }} downto 0){% endif %} := {% if bf.width > 1 %}{% if bf.reset >= 0 and bf.reset <= 2147483647 %}std_logic_vector(to_unsigned({{ bf.reset }}, {{ bf.width }})){% else %}x"{{ '%0*X' | format((bf.width + 3) // 4, bf.reset) }}"{% endif %}{% else %}'{{ bf.reset }}'{% endif %};
+{% endfor %}
+{% endfor %}
+{% endif %}
+    
+    -- Clock and reset signals
+    signal clk : std_logic := '0';
+    signal rst : std_logic := {% if 'pos' in config['register_reset'] %}'1'{% else %}'0'{% endif %};
+    
+{% for reg in rmap %}
+    {% for bf in reg %}
+    -- {{ reg.name }}.{{ bf.name }} register signals
+        {% if 'a' in bf.hardware %}
+            {% if 'i' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess : std_logic;
+            {% endif %}
+            {% if 'o' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess : std_logic;
+            {% endif %}
+        {% endif %}
+        {% if 'l' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock : std_logic := '0';
+        {% endif %}
+        {% if 'e' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en : std_logic := '0';
+        {% endif %}
+        {% if 'c' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr : std_logic := '0';
+        {% endif %}
+        {% if 's' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set : std_logic := '0';
+        {% endif %}
+        {% if 'q' in bf.hardware and 'r' in bf.access %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid : std_logic := '0';
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren : std_logic;
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% else %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% endif %};
+        {% endif %}
+        {% if 'i' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %} := {% if bf.width > 1 %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% else %}CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET{% endif %};
+        {% endif %}
+        {% if 'o' in bf.hardware %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+        {% endif %}
+        {% if 'q' in bf.hardware and  'w' in bf.access %}
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out : std_logic{% if bf.width > 1 %}_vector({% if bf.width == config['data_width'] %}DATA_W-1{% else %}{{ bf.width - 1 }}{% endif %} downto 0){% endif %};
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready : std_logic := '1';
+    signal csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen : std_logic;
+        {% endif %}
+    {% endfor %}
+
+{% endfor %}
+
+    -- AXI-Lite signals
+    signal axil_awaddr  : std_logic_vector(ADDR_W-1 downto 0) := (others => '0');
+    signal axil_awprot  : std_logic_vector(2 downto 0) := (others => '0');
+    signal axil_awvalid : std_logic := '0';
+    signal axil_awready : std_logic;
+    signal axil_wdata   : std_logic_vector(DATA_W-1 downto 0) := (others => '0');
+    signal axil_wstrb   : std_logic_vector(STRB_W-1 downto 0) := (others => '0');
+    signal axil_wvalid  : std_logic := '0';
+    signal axil_wready  : std_logic;
+    signal axil_bresp   : std_logic_vector(1 downto 0);
+    signal axil_bvalid  : std_logic;
+    signal axil_bready  : std_logic := '0';
+    signal axil_araddr  : std_logic_vector(ADDR_W-1 downto 0) := (others => '0');
+    signal axil_arprot  : std_logic_vector(2 downto 0) := (others => '0');
+    signal axil_arvalid : std_logic := '0';
+    signal axil_arready : std_logic;
+    signal axil_rdata   : std_logic_vector(DATA_W-1 downto 0);
+    signal axil_rresp   : std_logic_vector(1 downto 0);
+    signal axil_rvalid  : std_logic;
+    signal axil_rready  : std_logic := '0';
+    
+    -- Test control
+    signal test_done : boolean := false;
+    signal error_count : integer := 0;
+
+begin
+
+    -- Clock generation
+    clk_proc: process
+    begin
+        while not test_done loop
+            clk <= '0';
+            wait for CLK_PERIOD / 2;
+            clk <= '1';
+            wait for CLK_PERIOD / 2;
+        end loop;
+        wait;
+    end process;
+
+    -- Reset generation
+    reset_proc: process
+    begin
+        rst <= {% if 'pos' in config['register_reset'] %}'1'{% else %}'0'{% endif %};
+        wait for CLK_PERIOD * 5;
+        rst <= {% if 'pos' in config['register_reset'] %}'0'{% else %}'1'{% endif %};
+        wait;
+    end process;
+
+    -- DUT instantiation
+    dut: {{ dut_name }}
+    generic map(
+        ADDR_W    => ADDR_W,
+        DATA_W    => DATA_W,
+        STRB_W    => STRB_W,
+        BASE_ADDR => {% if config['base_address'] >= 0 and config['base_address'] <= 2147483647 %}std_logic_vector(to_unsigned({{ config['base_address'] }}, 32)){% else %}x"{{ '%08X' | format(config['base_address']) }}"{% endif %}
+    )
+    port map(
+        clk           => clk,
+        rst           => rst,
+{% for reg in rmap %}
+    {% for bf in reg %}
+        -- {{ reg.name }}.{{ bf.name }}
+        {% if 'a' in bf.hardware %}
+            {% if 'i' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_raccess,
+            {% endif %}
+            {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_waccess,
+            {% endif %}
+        {% endif %}
+        {% if 'l' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_lock,
+        {% endif %}
+        {% if 'e' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_en,
+        {% endif %}
+        {% if 'c' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_clr,
+        {% endif %}
+        {% if 's' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_set,
+        {% endif %}
+        {% if 'q' in bf.hardware and 'r' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_rvalid,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_ren,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
+        {% endif %}
+        {% if 'i' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_in,
+        {% endif %}
+        {% if 'o' in bf.hardware %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out,
+        {% endif %}
+        {% if 'q' in bf.hardware and  'w' in bf.access %}
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_out,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wready,
+        csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen => csr_{{ reg.name|lower }}_{{ bf.name|lower }}_wen,
+        {% endif %}
+    {% endfor %}
+
+{% endfor %}
+        axil_awaddr   => axil_awaddr,
+        axil_awprot   => axil_awprot,
+        axil_awvalid  => axil_awvalid,
+        axil_awready  => axil_awready,
+        axil_wdata    => axil_wdata,
+        axil_wstrb    => axil_wstrb,
+        axil_wvalid   => axil_wvalid,
+        axil_wready   => axil_wready,
+        axil_bresp    => axil_bresp,
+        axil_bvalid   => axil_bvalid,
+        axil_bready   => axil_bready,
+        axil_araddr   => axil_araddr,
+        axil_arprot   => axil_arprot,
+        axil_arvalid  => axil_arvalid,
+        axil_arready  => axil_arready,
+        axil_rdata    => axil_rdata,
+        axil_rresp    => axil_rresp,
+        axil_rvalid   => axil_rvalid,
+        axil_rready   => axil_rready
+    );
+
+    -- AXI-Lite write procedure
+    procedure axil_write(
+        constant addr : in std_logic_vector(ADDR_W-1 downto 0);
+        constant data : in std_logic_vector(DATA_W-1 downto 0);
+        constant strb : in std_logic_vector(STRB_W-1 downto 0) := (others => '1');
+        signal awaddr  : out std_logic_vector(ADDR_W-1 downto 0);
+        signal awvalid : out std_logic;
+        signal awready : in std_logic;
+        signal wdata   : out std_logic_vector(DATA_W-1 downto 0);
+        signal wstrb   : out std_logic_vector(STRB_W-1 downto 0);
+        signal wvalid  : out std_logic;
+        signal wready  : in std_logic;
+        signal bresp   : in std_logic_vector(1 downto 0);
+        signal bvalid  : in std_logic;
+        signal bready  : out std_logic
+    ) is
+    begin
+        -- Write address phase
+        awaddr <= addr;
+        awvalid <= '1';
+        wdata <= data;
+        wstrb <= strb;
+        wvalid <= '1';
+        bready <= '1';
+        
+        wait until awready = '1';
+        wait for CLK_PERIOD;
+        awvalid <= '0';
+        
+        wait until wready = '1';
+        wait for CLK_PERIOD;
+        wvalid <= '0';
+        
+        wait until bvalid = '1';
+        wait for CLK_PERIOD;
+        bready <= '0';
+        
+        if bresp /= "00" then
+            report "AXI-Lite write error response: " & integer'image(to_integer(unsigned(bresp))) severity error;
+        end if;
+        
+        wait for CLK_PERIOD;
+    end procedure;
+    
+    -- AXI-Lite read procedure
+    procedure axil_read(
+        constant addr : in std_logic_vector(ADDR_W-1 downto 0);
+        variable data : out std_logic_vector(DATA_W-1 downto 0);
+        signal araddr  : out std_logic_vector(ADDR_W-1 downto 0);
+        signal arvalid : out std_logic;
+        signal arready : in std_logic;
+        signal rdata   : in std_logic_vector(DATA_W-1 downto 0);
+        signal rresp   : in std_logic_vector(1 downto 0);
+        signal rvalid  : in std_logic;
+        signal rready  : out std_logic
+    ) is
+    begin
+        -- Read address phase
+        araddr <= addr;
+        arvalid <= '1';
+        rready <= '1';
+        
+        wait until arready = '1';
+        wait for CLK_PERIOD;
+        arvalid <= '0';
+        
+        -- Read data phase
+        wait until rvalid = '1';
+        data := rdata;
+        wait for CLK_PERIOD;
+        rready <= '0';
+        
+        if rresp /= "00" then
+            report "AXI-Lite read error response: " & integer'image(to_integer(unsigned(rresp))) severity error;
+        end if;
+        
+        wait for CLK_PERIOD;
+    end procedure;
+
+    -- Stimulus process
+    stim_proc: process
+        variable addr : std_logic_vector(ADDR_W-1 downto 0);
+        variable data : std_logic_vector(DATA_W-1 downto 0);
+        variable expected_data : std_logic_vector(DATA_W-1 downto 0);
+    begin
+        -- Wait for reset
+        wait until rst = {% if 'pos' in config['register_reset'] %}'0'{% else %}'1'{% endif %};
+        wait for CLK_PERIOD * 2;
+        
+        report "Starting testbench for {{ dut_name }}";
+        
+{% if rmap %}
+{% for reg in rmap %}
+        -- Test {{ reg.name }} register (address 0x{{ '%X' | format(reg.address) }})
+        report "Testing {{ reg.name }} register";
+        
+        -- Test reset values by reading
+        addr := CSR_{{ reg.name|upper }}_ADDR;
+        axil_read(addr, data, axil_araddr, axil_arvalid, axil_arready,
+                  axil_rdata, axil_rresp, axil_rvalid, axil_rready);
+        
+        expected_data := (others => '0');
+{% for bf in reg %}
+{% if bf.width > 1 %}
+        expected_data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB + CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH - 1 downto CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET;
+{% else %}
+        expected_data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_RESET;
+{% endif %}
+{% endfor %}
+        
+        if data /= expected_data then
+            report "{{ reg.name }} reset value mismatch" severity error;
+            error_count <= error_count + 1;
+        else
+            report "{{ reg.name }} reset value correct";
+        end if;
+        
+        wait for CLK_PERIOD * 2;
+        
+{% set has_writable = False %}
+{% for bf in reg %}
+{% if bf.access in ['rw', 'wo'] %}
+{% set has_writable = True %}
+{% endif %}
+{% endfor %}
+{% if has_writable %}
+        -- Test write to {{ reg.name }} register
+        data := (others => '0');
+{% for bf in reg %}
+{% if bf.access in ['rw', 'wo'] %}
+{% if bf.width > 1 %}
+        data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB + CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH - 1 downto CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := std_logic_vector(to_unsigned({{ (2 ** bf.width - 1) if bf.width < 4 else 15 }}, CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_WIDTH));
+{% else %}
+        data(CSR_{{ reg.name|upper }}_{{ bf.name|upper }}_LSB) := '1';
+{% endif %}
+{% endif %}
+{% endfor %}
+        
+        axil_write(addr, data, (others => '1'), axil_awaddr, axil_awvalid, axil_awready,
+                   axil_wdata, axil_wstrb, axil_wvalid, axil_wready,
+                   axil_bresp, axil_bvalid, axil_bready);
+        
+        report "{{ reg.name }} write completed";
+        
+        wait for CLK_PERIOD * 2;
+        
+        -- Read back {{ reg.name }} register
+        axil_read(addr, expected_data, axil_araddr, axil_arvalid, axil_arready,
+                  axil_rdata, axil_rresp, axil_rvalid, axil_rready);
+        
+        if expected_data /= data then
+            report "{{ reg.name }} readback mismatch" severity error;
+            error_count <= error_count + 1;
+        else
+            report "{{ reg.name }} readback correct";
+        end if;
+        
+        wait for CLK_PERIOD * 2;
+{% endif %}
+        
+{% endfor %}
+{% endif %}
+        
+        -- Report results
+        if error_count = 0 then
+            report "ALL TESTS PASSED" severity note;
+        else
+            report "TESTS FAILED with " & integer'image(error_count) & " errors" severity error;
+        end if;
+        
+        test_done <= true;
+        wait;
+    end process;
+
+    -- Timeout watchdog
+    timeout_proc: process
+    begin
+        wait for 50 us;
+        if not test_done then
+            report "TIMEOUT: Test did not complete" severity failure;
+        end if;
+        wait;
+    end process;
+
+end testbench;
