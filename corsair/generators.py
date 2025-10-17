@@ -606,3 +606,37 @@ class Python(Generator, Jinja2):
         j2_vars['config'] = config.globcfg
         # render
         self.render_to_file(j2_template, j2_vars, self.path)
+
+
+class AxilTbVhdl(Generator, Jinja2):
+    """Create AXI-Lite VHDL testbench file.
+
+    :param rmap: Register map object
+    :type rmap: :class:`corsair.RegisterMap`
+    :param path: Path to the output file
+    :type path: str
+    """
+
+    def __init__(self, rmap=None, path='tb_regs.vhd', **args):
+        super().__init__(rmap, **args)
+        self.path = path
+
+    def generate(self):
+        # validate parameters
+        self.validate()
+        # prepare jinja2
+        j2_template = 'axil_tb_vhdl.j2'
+        j2_vars = {}
+        j2_vars['corsair_ver'] = __version__
+        j2_vars['rmap'] = self.rmap
+        # Extract module name: for "hw/tb_regs.vhd" -> "regs", for "hw/regs_tb.vhd" -> "regs"
+        filename = utils.get_file_name(self.path)
+        if filename.startswith('tb_'):
+            j2_vars['module_name'] = filename[3:]
+        elif filename.endswith('_tb'):
+            j2_vars['module_name'] = filename[:-3]
+        else:
+            j2_vars['module_name'] = filename
+        j2_vars['config'] = config.globcfg
+        # render
+        self.render_to_file(j2_template, j2_vars, self.path)

@@ -1,5 +1,5 @@
 [globcfg]
-base_address = 0
+base_address = 0x80080000
 data_width = 32
 address_width = 16
 register_reset = sync_pos
@@ -8,31 +8,15 @@ address_alignment = data_width
 force_name_case = none
 regmap_path = regs.json
 
-[v_module]
-path = hw/regs.v
-read_filler = 0
-interface = axil
-generator = Verilog
-
 [vhdl_module]
 path = hw/regs.vhd
 read_filler = 0
 interface = axil
 generator = Vhdl
 
-[v_header]
-path = hw/regs.vh
-prefix = CSR
-generator = VerilogHeader
-
-[sv_pkg]
-path = hw/regs_pkg.sv
-prefix = CSR
-generator = SystemVerilogPackage
-
-[py]
-path = sw/regs.py
-generator = Python
+[axil_tb_vhdl]
+path = hw/tb_regs.vhd
+generator = AxilTbVhdl
 
 [c_header]
 path = sw/regs.h
@@ -54,4 +38,3 @@ print_images = True
 image_dir = adoc_img
 print_conventions = True
 generator = Asciidoc
-

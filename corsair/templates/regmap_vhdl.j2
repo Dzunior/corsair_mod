@@ -226,7 +226,8 @@ entity {{ module_name }} is
 generic(
     ADDR_W : integer := {{ config['address_width'] }};
     DATA_W : integer := {{ config['data_width'] }};
-    STRB_W : integer := {{ config['data_width'] // 8 }}
+    STRB_W : integer := {{ config['data_width'] // 8 }};
+    BASE_ADDR : std_logic_vector(31 downto 0) := x"{{ '%08X' | format(config['base_address']) }}"
 );
 port(
     clk    : in std_logic;

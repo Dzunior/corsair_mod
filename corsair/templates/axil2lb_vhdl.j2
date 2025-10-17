@@ -61,7 +61,7 @@ generic(
     ADDR_W      : integer := {{ config['address_width'] }};
     DATA_W      : integer := {{ config['data_width'] }};
     STRB_W      : integer := {{ config['data_width'] // 8 }};
-    BASE_ADDR   : std_logic_vector({{ config['address_width'] }}-1 downto 0) := x"{{ '%08X' | format(config['base_address']) if config['address_width'] <= 32 else '%016X' | format(config['base_address']) }}"
+    BASE_ADDR   : std_logic_vector(31 downto 0) := x"{{ '%08X' | format(config['base_address']) }}"
 );
 port(
     clk    : in std_logic;
@@ -105,7 +105,6 @@ end {{ module_name }};
 architecture arch_imp of {{ module_name }} is
 {% macro axil_signals(regmap_embed=False) %}
     {% if regmap_embed %}
-
 -- Clock Interface
 attribute X_INTERFACE_INFO : string;
 attribute X_INTERFACE_PARAMETER : string;
@@ -179,24 +178,24 @@ signal axil_bvalid_int : std_logic;
 signal axil_rdata_int  : std_logic_vector(DATA_W-1 downto 0);
 signal axil_rvalid_int : std_logic;
 
--- Address range checking
+-- Address range checking aaa
 signal addr_in_range_w : std_logic;
 signal addr_in_range_r : std_logic;
-
 {% endmacro %}
 {{ axil_signals() }}
 
+
 begin
 
+{% macro axil_core() %}
 -- Address translation: Convert AXI absolute addresses to local bus relative addresses
-waddr_relative <= std_logic_vector(unsigned(waddr_absolute) - unsigned(BASE_ADDR));
-raddr_relative <= std_logic_vector(unsigned(raddr_absolute) - unsigned(BASE_ADDR));
+waddr_relative <= std_logic_vector(unsigned(waddr_absolute) - unsigned(BASE_ADDR(ADDR_W-1 downto 0)));
+raddr_relative <= std_logic_vector(unsigned(raddr_absolute) - unsigned(BASE_ADDR(ADDR_W-1 downto 0)));
 
 -- Address range checking (optional - can be used for error responses)
-addr_in_range_w <= '1' when unsigned(waddr_absolute) >= unsigned(BASE_ADDR) else '0';
-addr_in_range_r <= '1' when unsigned(raddr_absolute) >= unsigned(BASE_ADDR) else '0';
+addr_in_range_w <= '1' when unsigned(waddr_absolute) >= unsigned(BASE_ADDR(ADDR_W-1 downto 0)) else '0';
+addr_in_range_r <= '1' when unsigned(raddr_absolute) >= unsigned(BASE_ADDR(ADDR_W-1 downto 0)) else '0';
 
-{% macro axil_core() %}
 axil_awready <= not awflag;
 axil_wready  <= not wflag;
 axil_bvalid  <= axil_bvalid_int;
